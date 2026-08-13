@@ -39,12 +39,30 @@ st.caption("Upload PDF files → ask questions → get answers grounded in your 
 with st.sidebar:
     st.header("⚙️ Settings")
 
-    api_key = st.text_input(
-        "Groq API Key",
-        type="password",
-        value=os.getenv("GROQ_API_KEY", ""),
-        help="Get a free key at https://console.groq.com",
-    )
+    # Load API key from .env so you don't type it every time
+    env_api_key = os.getenv("GROQ_API_KEY", "").strip()
+
+    if env_api_key:
+        api_key = env_api_key
+        st.success("API key loaded from .env")
+        with st.expander("Override API key (optional)"):
+            override = st.text_input(
+                "Groq API Key",
+                type="password",
+                value="",
+                help="Leave empty to keep the key from .env",
+            )
+            if override.strip():
+                api_key = override.strip()
+    else:
+        api_key = st.text_input(
+            "Groq API Key",
+            type="password",
+            value="",
+            help="Create a .env file with GROQ_API_KEY=your_key to avoid typing this every time",
+        )
+        if not api_key:
+            st.warning("No API key found. Add it here or create a .env file.")
 
     model_name = st.selectbox(
         "LLM Model",
