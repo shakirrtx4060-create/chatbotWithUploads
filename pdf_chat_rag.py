@@ -39,7 +39,6 @@ st.caption("Upload PDF files → ask questions → get answers grounded in your 
 with st.sidebar:
     st.header("⚙️ Settings")
 
-    # Load API key from .env so you don't type it every time
     env_api_key = os.getenv("GROQ_API_KEY", "").strip()
 
     if env_api_key:
@@ -64,15 +63,18 @@ with st.sidebar:
         if not api_key:
             st.warning("No API key found. Add it here or create a .env file.")
 
+    # Standard active Groq models
+    DEFAULT_MODELS = [
+        "llama-3.1-8b-instant",
+        "llama-3.3-70b-versatile",
+        "deepseek-r1-distill-llama-70b",
+        "qwen/qwen-2.5-32b",
+    ]
+
     model_name = st.selectbox(
         "LLM Model",
-        [
-            "llama-3.3-70b-versatile",
-            "llama-3.1-8b-instant",
-            "mixtral-8x7b-32768",
-            "gemma2-9b-it",
-        ],
-        index=0,
+        DEFAULT_MODELS,
+        index=0,  # Defaults to llama-3.1-8b-instant for instant reliability
     )
 
     top_k = st.slider("Documents to retrieve (top-k)", 2, 8, 4)
@@ -115,7 +117,6 @@ def process_pdfs(files) -> Chroma | None:
     all_docs = []
     with tempfile.TemporaryDirectory() as tmpdir:
         for f in files:
-            # Save uploaded file to disk so PyPDFLoader can read it
             path = Path(tmpdir) / f.name
             path.write_bytes(f.getvalue())
 
@@ -176,13 +177,11 @@ if "vectorstore" not in st.session_state:
     st.info("👈 Upload one or more PDFs in the sidebar and click **Process PDFs** to start chatting.")
     st.stop()
 
-# Show which files are loaded
 st.success(
     f"Ready — {len(st.session_state.file_names)} file(s) loaded: "
     + ", ".join(st.session_state.file_names)
 )
 
-# Chat history
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
@@ -196,12 +195,10 @@ if prompt := st.chat_input("Ask a question about your PDFs…"):
         st.error("Please enter your Groq API key in the sidebar.")
         st.stop()
 
-    # Show user message
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # Retrieve + generate
     with st.chat_message("assistant"):
         with st.spinner("Thinking…"):
             try:
@@ -210,8 +207,8 @@ if prompt := st.chat_input("Ask a question about your PDFs…"):
                 )
 
                 llm = ChatGroq(
-                    groq_api_key=api_key,
-                    model_name=model_name,
+                    api_key=api_key,
+                    model=model_name,
                     temperature=0.1,
                     max_tokens=1024,
                 )
