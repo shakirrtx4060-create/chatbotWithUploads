@@ -6,6 +6,7 @@ Run with:  streamlit run pdf_chat_rag.py
 import os
 import tempfile
 from pathlib import Path
+import requests
 
 import streamlit as st
 from dotenv import load_dotenv
@@ -32,6 +33,47 @@ st.set_page_config(
 
 st.title("📄 Chat with your PDFs")
 st.caption("Upload PDF files → ask questions → get answers grounded in your documents")
+
+
+# ──────────────────────────────────────────────
+# Dynamic Groq Model Fetcher
+# ──────────────────────────────────────────────
+@st.cache_data(ttl=1800)
+def fetch_available_groq_models(api_key: str) -> list[str]:
+    """Dynamically fetch all chat models available to this Groq API key."""
+    fallback_models = [
+        "llama-3.1-8b-instant",
+        "llama-3.3-70b-versatile",
+        "qwen-2.5-32b",
+        "deepseek-r1-distill-llama-70b",
+    ]
+    if not api_key:
+        return fallback_models
+
+    try:
+        res = requests.get(
+            "https://api.groq.com/openai/v1/models",
+            headers={"Authorization": f"Bearer {api_key}"},
+            timeout=5,
+        )
+        if res.status_code == 200:
+            data = res.json().get("data", [])
+            # Filter out non-chat models like whisper and guard
+            chat_models = [
+                m["id"]
+                for m in data
+                if not m["id"].startswith("whisper") and "guard" not in m["id"]
+            ]
+            if chat_models:
+                # Ensure primary fast model is first
+                if "llama-3.1-8b-instant" in chat_models:
+                    chat_models.remove("llama-3.1-8b-instant")
+                    chat_models.insert(0, "llama-3.1-8b-instant")
+                return chat_models
+    except Exception:
+        pass
+    return fallback_models
+
 
 # ──────────────────────────────────────────────
 # Sidebar — settings + upload
@@ -63,18 +105,12 @@ with st.sidebar:
         if not api_key:
             st.warning("No API key found. Add it here or create a .env file.")
 
-    # Standard active Groq models
-    DEFAULT_MODELS = [
-        "llama-3.1-8b-instant",
-        "llama-3.3-70b-versatile",
-        "deepseek-r1-distill-llama-70b",
-        "qwen/qwen-2.5-32b",
-    ]
-
+    # Dynamically populate model options
+    available_models = fetch_available_groq_models(api_key)
     model_name = st.selectbox(
         "LLM Model",
-        DEFAULT_MODELS,
-        index=0,  # Defaults to llama-3.1-8b-instant for instant reliability
+        available_models,
+        index=0,
     )
 
     top_k = st.slider("Documents to retrieve (top-k)", 2, 8, 4)
